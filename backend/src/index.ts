@@ -43,6 +43,41 @@ const initializeVectorStore = async (): Promise<void> => {
   }
 };
 
+const registryPath = './document_registry.json';
+
+interface DocumentRegistryItem {
+  id: string;
+  originalname: string;
+  filename: string;
+  mimetype: string;
+  size: number;
+  supported: boolean;
+  chunkCount: number;
+  storedChunkCount: number;
+  uploadedAt: string;
+  parseError?: string;
+  storageError?: string;
+}
+
+let documentRegistry: DocumentRegistryItem[] = [];
+
+const loadDocumentRegistry = async (): Promise<void> => {
+  try {
+    const contents = await fs.readFile(registryPath, 'utf-8');
+    documentRegistry = JSON.parse(contents) as DocumentRegistryItem[];
+  } catch (error) {
+    documentRegistry = [];
+  }
+};
+
+const saveDocumentRegistry = async (): Promise<void> => {
+  await fs.writeFile(registryPath, JSON.stringify(documentRegistry, null, 2), 'utf-8');
+};
+
+const addDocumentRegistryItem = async (item: DocumentRegistryItem): Promise<void> => {
+  documentRegistry.push(item);
+  await saveDocumentRegistry();
+};
 
 // Supported file types
 const SUPPORTED_MIMETYPES = [
@@ -121,6 +156,15 @@ app.get('/', (req, res) => {
   res.json({ message: 'RAG System Backend' });
 });
 
+app.get('/documents', async (req, res) => {
+  try {
+    await loadDocumentRegistry();
+    res.json({ documents: documentRegistry });
+  } catch (error) {
+    res.status(500).json({ error: 'Unable to load document registry', details: (error as Error).message });
+  }
+});
+
 app.post('/ingest', upload.array('files', 10), async (req, res) => {
   try {
     const files = req.files as Express.Multer.File[] | undefined;
@@ -164,6 +208,22 @@ app.post('/ingest', upload.array('files', 10), async (req, res) => {
           storageError = `Failed to store in vector database: ${(error as Error).message}`;
         }
       }
+
+      const registryItem: DocumentRegistryItem = {
+        id: `${file.originalname}-${Date.now()}`,
+        originalname: file.originalname,
+        filename: file.filename,
+        mimetype: file.mimetype,
+        size: file.size,
+        supported: isSupported,
+        chunkCount: chunks.length,
+        storedChunkCount: storedIds.length,
+        uploadedAt: new Date().toISOString(),
+        parseError: parseResult.parseError,
+        storageError,
+      };
+
+      await addDocumentRegistryItem(registryItem);
 
       return {
         originalname: file.originalname,
