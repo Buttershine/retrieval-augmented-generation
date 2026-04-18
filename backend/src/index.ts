@@ -15,12 +15,32 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 8000;
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({
+  dest: 'uploads/',
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+    files: 10 // Max 10 files
+  },
+  fileFilter: (req, file, cb) => {
+    const isSupported = isSupportedFileType(file.mimetype, file.originalname);
+    if (isSupported) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type: ${file.originalname} (${file.mimetype})`));
+    }
+  }
+});
 const chromaDbPath = './chroma_db';
 
 // Initialize embeddings
+const openaiApiKey = process.env.OPENAI_API_KEY;
+if (!openaiApiKey) {
+  console.error('OPENAI_API_KEY environment variable is required');
+  process.exit(1);
+}
+
 const embeddings = new OpenAIEmbeddings({
-  openAIApiKey: process.env.OPENAI_API_KEY,
+  openAIApiKey: openaiApiKey,
   modelName: 'text-embedding-3-small',
 });
 
@@ -151,6 +171,22 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+// Error handling middleware for multer
+app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large. Maximum size is 50MB.' });
+    }
+    if (error.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({ error: 'Too many files. Maximum 10 files allowed.' });
+    }
+  }
+  if (error.message.includes('Unsupported file type')) {
+    return res.status(400).json({ error: error.message });
+  }
+  next(error);
+});
 
 app.get('/', (req, res) => {
   res.json({ message: 'RAG System Backend' });
