@@ -34,13 +34,12 @@ const chromaDbPath = './chroma_db';
 
 // Initialize embeddings
 const openaiApiKey = process.env.OPENAI_API_KEY;
-if (!openaiApiKey) {
-  console.error('OPENAI_API_KEY environment variable is required');
-  process.exit(1);
+if (!openaiApiKey || openaiApiKey === 'dummy-key-for-testing') {
+  console.warn('OPENAI_API_KEY not set or is dummy key - embeddings will fail but persistence can be tested');
 }
 
 const embeddings = new OpenAIEmbeddings({
-  openAIApiKey: openaiApiKey,
+  openAIApiKey: openaiApiKey || 'dummy-key-for-testing',
   modelName: 'text-embedding-3-small',
 });
 

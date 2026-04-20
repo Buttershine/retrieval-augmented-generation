@@ -1,0 +1,14 @@
+[
+  {
+    "id": "test_doc.txt-1776681464709",
+    "originalname": "test_doc.txt",
+    "filename": "cee6f3d7cc89e62ba42cb1d6b5567d7f",
+    "mimetype": "text/plain",
+    "size": 126,
+    "supported": true,
+    "chunkCount": 1,
+    "storedChunkCount": 0,
+    "uploadedAt": "2026-04-20T10:37:44.709Z",
+    "storageError": "Failed to store in vector database: 401 Incorrect API key provided: dummy-ke*********ting. You can find your API key at https://platform.openai.com/account/api-keys."
+  }
+]
