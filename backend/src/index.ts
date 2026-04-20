@@ -65,6 +65,21 @@ const initializeVectorStore = async (): Promise<void> => {
   }
 };
 
+// Phase 2, Step 1: Set Up Retriever from Chroma
+let retriever: any = null;
+
+const initializeRetriever = async (): Promise<void> => {
+  if (!vectorStore) {
+    await initializeVectorStore();
+  }
+  if (vectorStore) {
+    retriever = vectorStore.asRetriever({
+      k: 4, // Return top 4 similar documents
+      // scoreThreshold: 0.5, // Optional: filter by similarity score
+    });
+  }
+};
+
 const registryPath = './document_registry.json';
 
 // Step 6: Maintain Document Registry
@@ -206,6 +221,34 @@ app.get('/documents', async (req, res) => {
     res.json({ documents: documentRegistry });
   } catch (error) {
     res.status(500).json({ error: 'Unable to load document registry', details: (error as Error).message });
+  }
+});
+
+// Test endpoint for Phase 2 Step 1: Retriever setup
+app.get('/test-retriever', async (req, res) => {
+  try {
+    if (!retriever) {
+      await initializeRetriever();
+    }
+    if (!retriever) {
+      return res.status(500).json({ error: 'Retriever not available - check vector store initialization' });
+    }
+
+    // Test with a sample query
+    const testQuery = 'What is this document about?';
+    const relevantDocs = await retriever.invoke(testQuery);
+
+    res.json({
+      message: 'Retriever test successful',
+      query: testQuery,
+      resultsCount: relevantDocs.length,
+      results: relevantDocs.map((doc: any) => ({
+        content: doc.pageContent.slice(0, 200) + '...',
+        metadata: doc.metadata
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Retriever test failed', details: (error as Error).message });
   }
 });
 
