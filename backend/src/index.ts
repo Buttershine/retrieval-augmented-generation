@@ -13,6 +13,7 @@ import { Document } from 'langchain/document';
 
 dotenv.config();
 
+// Step 1: Project Init + File Upload Middleware
 const app = express();
 const port = process.env.PORT || 8000;
 const upload = multer({
@@ -32,6 +33,7 @@ const upload = multer({
 });
 const chromaDbPath = './chroma_db';
 
+// Step 5: Create Embeddings + Vector Store
 // Initialize embeddings
 const openaiApiKey = process.env.OPENAI_API_KEY;
 if (!openaiApiKey) {
@@ -65,6 +67,7 @@ const initializeVectorStore = async (): Promise<void> => {
 
 const registryPath = './document_registry.json';
 
+// Step 6: Maintain Document Registry
 interface DocumentRegistryItem {
   id: string;
   originalname: string;
@@ -99,6 +102,7 @@ const addDocumentRegistryItem = async (item: DocumentRegistryItem): Promise<void
   await saveDocumentRegistry();
 };
 
+// Step 2: File Type Detection
 // Supported file types
 const SUPPORTED_MIMETYPES = [
   'application/pdf',
@@ -120,6 +124,7 @@ const isSupportedFileType = (mimetype: string | undefined, originalname: string 
   return mimetypeSupported || extSupported;
 };
 
+// Step 3: Parse File Contents
 const parsePdf = async (filePath: string): Promise<string> => {
   const buffer = await fs.readFile(filePath);
   const data = await pdfParse(buffer);
@@ -157,6 +162,7 @@ const parseFileContent = async (file: Express.Multer.File): Promise<{ text: stri
   }
 };
 
+// Step 4: Split Text into Chunks
 const splitTextIntoChunks = async (text: string): Promise<string[]> => {
   const splitter = new RecursiveCharacterTextSplitter({
     chunkSize: 1000,
@@ -172,6 +178,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Step 9: Error Handling & Testing
 // Error handling middleware for multer
 app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (error instanceof multer.MulterError) {
@@ -192,6 +199,7 @@ app.get('/', (req, res) => {
   res.json({ message: 'RAG System Backend' });
 });
 
+// Step 8: Add `GET /documents` Endpoint
 app.get('/documents', async (req, res) => {
   try {
     await loadDocumentRegistry();
@@ -201,6 +209,7 @@ app.get('/documents', async (req, res) => {
   }
 });
 
+// Step 7: Complete `/ingest` Endpoint
 app.post('/ingest', upload.array('files', 10), async (req, res) => {
   try {
     const files = req.files as Express.Multer.File[] | undefined;
