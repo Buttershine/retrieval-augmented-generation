@@ -98,10 +98,10 @@ Build the retrieval system and response generation using LangChain.js LCEL chain
 - [x] Configure similarity search parameters (k=4, score threshold)
 - [x] Test retriever with sample queries
 
-#### Step 2: Create Prompt Template
-- [ ] Design RAG prompt template with context and question placeholders
-- [ ] Include instructions for answer generation based on provided context
-- [ ] Add metadata handling (source citations)
+#### Step 2: Create Prompt Template ✅
+- [x] Design RAG prompt template with context and question placeholders
+- [x] Include instructions for answer generation based on provided context
+- [x] Add metadata handling (source citations)
 
 #### Step 3: Initialize LLM
 - [ ] Set up OpenAI/Anthropic chat model (gpt-4, claude-3-sonnet)

@@ -10,6 +10,7 @@ import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { Chroma } from '@langchain/community/vectorstores/chroma';
 import { Document } from 'langchain/document';
+import { PromptTemplate } from '@langchain/core/prompts';
 
 dotenv.config();
 
@@ -78,6 +79,30 @@ const initializeRetriever = async (): Promise<void> => {
       // scoreThreshold: 0.5, // Optional: filter by similarity score
     });
   }
+};
+
+// Phase 2, Step 2: Create Prompt Template
+const ragPromptTemplate = PromptTemplate.fromTemplate(
+  `You are a helpful AI assistant answering questions based on provided documents.
+
+Use the following context to answer the user's question. Be concise and accurate.
+If the information is not in the provided context, say "I don't have enough information to answer this question."
+
+Context:
+{context}
+
+Question: {question}
+
+Answer:`
+);
+
+// Function to format retrieved documents for the prompt context
+const formatDocsWithMetadata = (docs: Document[]): string => {
+  return docs.map((doc, index) => {
+    const metadata = doc.metadata || {};
+    const source = metadata.source || 'Unknown source';
+    return `[Document ${index + 1}] (Source: ${source})\n${doc.pageContent}`;
+  }).join('\n---\n');
 };
 
 const registryPath = './document_registry.json';
