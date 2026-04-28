@@ -7,10 +7,11 @@ import fs from 'fs/promises';
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
-import { OpenAIEmbeddings } from '@langchain/openai';
+import { OpenAIEmbeddings, ChatOpenAI } from '@langchain/openai';
 import { Chroma } from '@langchain/community/vectorstores/chroma';
 import { Document } from 'langchain/document';
 import { PromptTemplate } from '@langchain/core/prompts';
+import { StringOutputParser } from '@langchain/core/output_parsers';
 
 dotenv.config();
 
@@ -103,6 +104,96 @@ const formatDocsWithMetadata = (docs: Document[]): string => {
     const source = metadata.source || 'Unknown source';
     return `[Document ${index + 1}] (Source: ${source})\n${doc.pageContent}`;
   }).join('\n---\n');
+};
+
+// Phase 2, Step 3: Initialize LLM
+let chatModel: ChatOpenAI | null = null;
+
+const initializeLLM = (): void => {
+  if (!openaiApiKey || openaiApiKey === 'dummy-key-for-testing') {
+    console.warn('OPENAI_API_KEY not set or is dummy key - LLM queries will fail');
+  }
+  
+  chatModel = new ChatOpenAI({
+    openAIApiKey: openaiApiKey || 'dummy-key-for-testing',
+    modelName: 'gpt-3.5-turbo', // Using gpt-3.5-turbo for cost-effectiveness
+    temperature: 0.7, // Balance between deterministic and creative responses
+    maxTokens: 1024, // Limit response length
+    topP: 0.9, // Nucleus sampling for response diversity
+  });
+  
+  console.log('LLM initialized with model: gpt-3.5-turbo');
+};
+
+// Phase 2, Step 4: Build LCEL Retrieval Chain
+let retrievalChain: any = null;
+
+const initializeRetrievalChain = async (): Promise<void> => {
+  try {
+    // Ensure all components are initialized
+    if (!retriever) {
+      await initializeRetriever();
+    }
+    if (!chatModel) {
+      initializeLLM();
+    }
+
+    if (!retriever || !chatModel) {
+      throw new Error('Retriever or ChatModel not initialized');
+    }
+
+    // Build the LCEL chain: retriever -> prompt -> llm -> output_parser
+    const outputParser = new StringOutputParser();
+
+    // Create a chain that formats the retrieved documents
+    const formatRetrievedDocs = (docs: Document[]): string => {
+      if (!docs || docs.length === 0) {
+        return 'No relevant documents found.';
+      }
+      return formatDocsWithMetadata(docs);
+    };
+
+    // Build the retrieval chain with runnable composition
+    retrievalChain = {
+      invoke: async (input: { question: string }) => {
+        try {
+          // Step 1: Retrieve relevant documents
+          const retrievedDocs = await retriever.invoke(input.question);
+          
+          // Step 2: Format documents for context
+          const context = formatRetrievedDocs(retrievedDocs);
+          
+          // Step 3: Create the full prompt with context and question
+          const prompt = await ragPromptTemplate.format({
+            context,
+            question: input.question,
+          });
+          
+          // Step 4: Get response from LLM
+          const response = await chatModel!.invoke(prompt);
+          
+          // Step 5: Parse the output (response is a BaseMessage, get the content)
+          const answer = typeof response === 'string' ? response : (response as any).content;
+          
+          // Step 6: Return response with source metadata
+          return {
+            answer,
+            sources: retrievedDocs.map((doc: Document) => ({
+              source: doc.metadata?.source || 'Unknown',
+              content: doc.pageContent.slice(0, 150) + '...',
+            })),
+            documentCount: retrievedDocs.length,
+          };
+        } catch (error) {
+          throw new Error(`Chain execution failed: ${(error as Error).message}`);
+        }
+      },
+    };
+
+    console.log('Retrieval chain initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize retrieval chain:', (error as Error).message);
+  }
 };
 
 const registryPath = './document_registry.json';
