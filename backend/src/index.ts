@@ -12,6 +12,7 @@ import { Chroma } from '@langchain/community/vectorstores/chroma';
 import { Document } from 'langchain/document';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
+import { BufferMemory } from 'langchain/memory';
 
 dotenv.config();
 
@@ -89,6 +90,8 @@ const ragPromptTemplate = PromptTemplate.fromTemplate(
 Use the following context to answer the user's question. Be concise and accurate.
 If the information is not in the provided context, say "I don't have enough information to answer this question."
 
+{history}
+
 Context:
 {context}
 
@@ -125,6 +128,19 @@ const initializeLLM = (): void => {
   console.log('LLM initialized with model: gpt-3.5-turbo');
 };
 
+// Phase 2, Step 5: Add Conversation History (Optional)
+let conversationMemory: BufferMemory | null = null;
+
+const initializeConversationMemory = (): void => {
+  conversationMemory = new BufferMemory({
+    returnMessages: false, // Return as string for prompt formatting
+    memoryKey: 'history',
+    inputKey: 'question',
+    outputKey: 'answer',
+  });
+  console.log('Conversation memory initialized');
+};
+
 // Phase 2, Step 4: Build LCEL Retrieval Chain
 let retrievalChain: any = null;
 
@@ -137,9 +153,12 @@ const initializeRetrievalChain = async (): Promise<void> => {
     if (!chatModel) {
       initializeLLM();
     }
+    if (!conversationMemory) {
+      initializeConversationMemory();
+    }
 
-    if (!retriever || !chatModel) {
-      throw new Error('Retriever or ChatModel not initialized');
+    if (!retriever || !chatModel || !conversationMemory) {
+      throw new Error('Retriever, ChatModel, or ConversationMemory not initialized');
     }
 
     // Build the LCEL chain: retriever -> prompt -> llm -> output_parser
@@ -163,19 +182,30 @@ const initializeRetrievalChain = async (): Promise<void> => {
           // Step 2: Format documents for context
           const context = formatRetrievedDocs(retrievedDocs);
           
-          // Step 3: Create the full prompt with context and question
+          // Step 3: Load conversation history
+          const history = await conversationMemory!.loadMemoryVariables({});
+          const historyText = history.history || '';
+          
+          // Step 4: Create the full prompt with history, context and question
           const prompt = await ragPromptTemplate.format({
+            history: historyText ? `Conversation History:\n${historyText}\n` : '',
             context,
             question: input.question,
           });
           
-          // Step 4: Get response from LLM
+          // Step 5: Get response from LLM
           const response = await chatModel!.invoke(prompt);
           
-          // Step 5: Parse the output (response is a BaseMessage, get the content)
+          // Step 6: Parse the output (response is a BaseMessage, get the content)
           const answer = typeof response === 'string' ? response : (response as any).content;
           
-          // Step 6: Return response with source metadata
+          // Step 7: Save conversation to memory
+          await conversationMemory!.saveContext(
+            { question: input.question },
+            { answer }
+          );
+          
+          // Step 8: Return response with source metadata
           return {
             answer,
             sources: retrievedDocs.map((doc: Document) => ({
